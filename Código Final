@@ -1,0 +1,86 @@
+ ########################################################--Import-- ######################################################
+from flask import Flask, jsonify
+from mysql.connector import Error
+import mysql.connector
+import paho.mqtt.client as mqtt
+"""
+Importar as bibliotecas para o código é uma das funções mais importantes, pois quando vamos usar alguma função muito
+especifica, usando a biblioteca certa pode facilitar muito mais as coisas ou ate mesmo, caso não use a biblioteca é
+impossível fazer alguns atividades, usando como um exemplo o -> import mysql.connector.
+"""
+#######################################################--Variaveis-- ####################################################
+tensao1 = ""
+tensao2 = ""
+Posicao = ""
+Lux = ""
+Tabela = ""
+"""
+As variáveis declaradas acima são necessárias, pois quando for necessário fazer alguma alteração de valor e informações,
+tudo isso ira acontecer dentro dessas variáveis, diminuindo assim as chances de acontecer alguns erros.
+"""
+#########################################################--Banco-- ######################################################
+def Banco(SQL):
+try:
+connection = mysql.connector.connect(host='localhost',
+database='RobSun', user='root', password='Senai123') inserir_valor = SQL
+consulta_valor = "SELECT * FROM `RobSun`.`DadosRobSun`" cursor = connection.cursor() cursor.execute(inserir_valor) cursor.execute(consulta_valor)
+linhas = cursor.fetchall()
+connection.commit()
+print("Numero de dados coletados:", cursor.rowcount) print(linhas)
+print(cursor.rowcount, "Tarefa concluida")
+global Tabela
+Tabela = linhas
+except Error as e:
+print("Falha do MySQL{}".format(e))
+"""
+O bloco Banco é o responsável por conectar o python com o banco de dados e assim podendo salvar os dados coletados pelo
+o RobSun, o banco é chamado mais uma vez, para poder subir todos os dados para o Aplicativo.
+
+ """
+########################################################--Topicos-- #############3#######################################
+def on_message(client, userdata, message):
+if (message.topic == "robsun/tensao1"): global tensao1
+tensao1 = message.payload.decode("utf-8") if (message.topic == "robsun/tensao2"):
+        global tensao2
+tensao2 = message.payload.decode("utf-8") if (message.topic == "robsun/posicao"):
+        global Posicao
+Posicao = message.payload.decode("utf-8") if (message.topic == "robsun/lux"):
+global Lux
+Lux = message.payload.decode("utf-8") if (message.topic == "robsun/app"):
+global Tabela
+Tabela = message.payload.decode("utf-8")
+"""
+Os tópicos tem a função principal facilitar a comunicação dos RobSun com o banco de dados e com o código em pyhton, pois
+como estamos enviando essas informações para um MQTT, com o tópico especifico conseguimos passar os dados em poucos
+passos, tendo a função principal ser o caminho por onde vamos coletar os dados.
+"""
+#########################################################--MQTT-- ####################################################### mqttBroker = "test.mosquitto.org"
+client = mqtt.Client("Smartphone")
+client.connect(mqttBroker) app = Flask(__name__)
+"""
+Como esta sendo necessário passar os dados em vários dispositivos diferentes, foi escolhido o uso de um MQTT, permitindo
+uma conexão mais rápido e fácil, porem esta sendo um mqtt free.
+"""
+client.loop_start()
+##################################################--TopicoSubscribing-- #################################################
+Tensao1 = client.subscribe("robsun/tensao1")
+Tensao2 = client.subscribe("robsun/tensao2")
+lux = client.subscribe("robsun/lux") posicao = client.subscribe("robsun/posicao") l = client.subscribe("robsun/app") client.on_message = on_message
+"""
+Esta sendo feito a inscrição dos tópicos para o MQTT, para podendo assim acessa os dados que foram enviados para os
+tópicos que foram declarados.
+
+ """
+##########################################################--API-- ####################################################### @app.route('/')
+def homepage():
+resposta = {"tensao01": tensao1, "tensao02": tensao2, "Posicao": Posicao, "Lux": Lux, "APP": Tabela}
+###################################################--Enviar Banco-- #################################################
+Dados = tensao1 + ',' + tensao2 + ',' + Posicao + ',' + Lux + ');'
+Declaracao = "INSERT INTO `RobSun`.`DadosRobSun`(`Tensao1`,`Tensao2`,`Posicao`,`Lux`) VALUES ("
+SQL = Declaracao + Dados print(SQL) print(Banco(SQL)) return jsonify(resposta)
+app.run(host='0.0.0.0')
+"""
+A API esta criando uma pagina web, podendo assim subir qualquer informação que for necessária, no caso do RobSun
+a API vem sendo usada para ver os dados postados nos tópicos e permitindo fazer o envio de alguns dados para o site,
+para que assim o aplicativo móvel consiga fazer a leitura dos dados sem maiores interferências
+"""
